@@ -1,0 +1,572 @@
+// Prisma Schema for Event Management Platform
+// Compatible with Neon Serverless PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String
+  phone         String?
+  avatarUrl     String?
+  isActive      Boolean   @default(true)
+  emailVerified DateTime?
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  roles         UserRole[]
+  checkIns      CheckIn[]
+  auditLogs     AuditLog[]
+  sessions      Session[]
+  accounts      Account[]
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       UserRole[]
+  permissions RolePermission[]
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  roles       RolePermission[]
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String @id @default(cuid())
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  scope     String?
+  createdAt DateTime @default(now())
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Event {
+  id              String   @id @default(cuid())
+  name            String
+  tagline         String?
+  description     String?  @db.Text
+  category        String?
+  theme           String?
+  startDate       DateTime
+  endDate         DateTime
+  startTime       String?
+  endTime         String?
+  venueName       String?
+  venueAddress    String?  @db.Text
+  googleMapsUrl   String?
+  contactEmail    String?
+  contactPhone    String?
+  websiteUrl      String?
+  logoUrl         String?
+  bannerUrl       String?
+  faviconUrl      String?
+  isPublished     Boolean  @default(false)
+  registrationMode String  @default("INVITATION")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  settings        EventSetting[]
+  pages           EventPage[]
+  ticketTypes     TicketType[]
+  speakers        Speaker[]
+  sponsors        Sponsor[]
+  artists         Artist[]
+  performers      Performer[]
+  volunteers      Volunteer[]
+  spocs           Spoc[]
+  registrations   Registration[]
+  invitations     Invitation[]
+  emailTemplates  EmailTemplate[]
+  emailCampaigns  EmailCampaign[]
+  reminders       Reminder[]
+  mediaAssets     MediaAsset[]
+  @@map("events")
+}
+
+model EventSetting {
+  id        String   @id @default(cuid())
+  eventId   String
+  key       String
+  value     String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  event     Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  @@unique([eventId, key])
+  @@map("event_settings")
+}
+
+model EventPage {
+  id          String   @id @default(cuid())
+  eventId     String
+  slug        String
+  title       String
+  content     String?  @db.Text
+  isEnabled   Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  metaTitle   String?
+  metaDesc    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  event       Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  sections    EventSection[]
+  @@unique([eventId, slug])
+  @@map("event_pages")
+}
+
+model EventSection {
+  id        String   @id @default(cuid())
+  pageId    String
+  type      String
+  title     String?
+  content   String?  @db.Text
+  config    Json?
+  sortOrder Int      @default(0)
+  isVisible Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  page      EventPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  @@map("event_sections")
+}
+
+model TicketType {
+  id              String   @id @default(cuid())
+  eventId         String
+  name            String
+  description     String?
+  price           Decimal  @default(0) @db.Decimal(10, 2)
+  currency        String   @default("INR")
+  capacity        Int?
+  isActive        Boolean  @default(true)
+  requiresInvite  Boolean  @default(false)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  event           Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  formFields      RegistrationFormField[]
+  registrations   Registration[]
+  spocAssignments SpocAssignment[]
+  invitations     Invitation[]
+  @@map("ticket_types")
+}
+
+model RegistrationFormField {
+  id          String   @id @default(cuid())
+  ticketTypeId String
+  label       String
+  fieldKey    String
+  fieldType   String
+  options     Json?
+  isRequired  Boolean  @default(false)
+  placeholder String?
+  helpText    String?
+  sortOrder   Int      @default(0)
+  validation  Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  ticketType  TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
+  @@map("registration_form_fields")
+}
+
+model Registration {
+  id              String   @id @default(cuid())
+  eventId         String
+  ticketTypeId    String
+  registrationId  String   @unique
+  status          String   @default("PENDING")
+  fullName        String
+  email           String
+  phone           String?
+  organization    String?
+  designation     String?
+  city            String?
+  country         String?
+  rsvpStatus      String?
+  invitationId    String?
+  answers         Json?
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  event           Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  ticketType      TicketType @relation(fields: [ticketTypeId], references: [id])
+  ticket          Ticket?
+  invitation      Invitation? @relation(fields: [invitationId], references: [id])
+  @@unique([eventId, email, ticketTypeId])
+  @@index([email])
+  @@index([status])
+  @@map("registrations")
+}
+
+model Ticket {
+  id              String   @id @default(cuid())
+  registrationId  String   @unique
+  ticketNumber    String   @unique
+  qrToken         String   @unique
+  qrCodeDataUrl   String?  @db.Text
+  status          String   @default("VALID")
+  issuedAt        DateTime @default(now())
+  expiresAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  registration    Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  checkIns        CheckIn[]
+  verifications   TicketVerification[]
+  @@map("tickets")
+}
+
+model TicketVerification {
+  id          String   @id @default(cuid())
+  ticketId    String
+  verifiedAt  DateTime @default(now())
+  verifiedBy  String?
+  result      String
+  ipAddress   String?
+  userAgent   String?
+  notes       String?
+  ticket      Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  @@map("ticket_verifications")
+}
+
+model CheckIn {
+  id          String   @id @default(cuid())
+  ticketId    String
+  checkedInBy String?
+  checkedInAt DateTime @default(now())
+  location    String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  ticket      Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  staff       User?  @relation(fields: [checkedInBy], references: [id])
+  @@map("check_ins")
+}
+
+model Invitation {
+  id            String   @id @default(cuid())
+  eventId       String
+  ticketTypeId  String?
+  code          String   @unique
+  email         String?
+  fullName      String?
+  maxUses       Int      @default(1)
+  usedCount     Int      @default(0)
+  expiresAt     DateTime?
+  status        String   @default("ACTIVE")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  event         Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  ticketType    TicketType? @relation(fields: [ticketTypeId], references: [id])
+  registrations Registration[]
+  @@index([code])
+  @@map("invitations")
+}
+
+model Speaker {
+  id          String   @id @default(cuid())
+  eventId     String
+  name        String
+  title       String?
+  bio         String?  @db.Text
+  photoUrl    String?
+  company     String?
+  linkedinUrl String?
+  twitterUrl  String?
+  sessionTitle String?
+  sessionTime  String?
+  sessionDay   String?
+  sortOrder   Int      @default(0)
+  isFeatured  Boolean  @default(false)
+  isVisible   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  event       Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  @@map("speakers")
+}
+
+model Sponsor {
+  id          String   @id @default(cuid())
+  eventId     String
+  name        String
+  logoUrl     String?
+  websiteUrl  String?
+  tier        String?
+  category    String?
+  description String?  @db.Text
+  sortOrder   Int      @default(0)
+  isVisible   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  event       Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  @@map("sponsors")
+}
+
+model Artist {
+  id          String   @id @default(cuid())
+  eventId     String
+  name        String
+  bio         String?  @db.Text
+  photoUrl    String?
+  performance String?
+  day         String?
+  time        String?
+  stage       String?
+  sortOrder   Int      @default(0)
+  isVisible   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  event       Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  @@map("artists")
+}
+
+model Performer {
+  id          String   @id @default(cuid())
+  eventId     String
+  name        String
+  bio         String?  @db.Text
+  photoUrl    String?
+  performance String?
+  day         String?
+  time        String?
+  stage       String?
+  sortOrder   Int      @default(0)
+  isVisible   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  event       Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  @@map("performers")
+}
+
+model Volunteer {
+  id          String   @id @default(cuid())
+  eventId     String
+  name        String
+  email       String?
+  phone       String?
+  role        String?
+  department  String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  event       Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  @@map("volunteers")
+}
+
+model Spoc {
+  id              String   @id @default(cuid())
+  eventId         String
+  name            String
+  designation     String?
+  department      String?
+  email           String
+  phone           String?
+  whatsapp        String?
+  photoUrl        String?
+  responsibility  String?  @db.Text
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  event           Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  assignments     SpocAssignment[]
+  @@map("spocs")
+}
+
+model SpocAssignment {
+  id           String @id @default(cuid())
+  spocId       String
+  ticketTypeId String
+  notes        String?
+  spoc         Spoc       @relation(fields: [spocId], references: [id], onDelete: Cascade)
+  ticketType   TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
+  @@unique([spocId, ticketTypeId])
+  @@map("spoc_assignments")
+}
+
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  eventId   String
+  name      String
+  subject   String
+  bodyHtml  String   @db.Text
+  bodyText  String?  @db.Text
+  type      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  event     Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  @@map("email_templates")
+}
+
+model EmailCampaign {
+  id            String   @id @default(cuid())
+  eventId       String
+  name          String
+  subject       String
+  bodyHtml      String   @db.Text
+  status        String   @default("DRAFT")
+  scheduledAt   DateTime?
+  sentAt        DateTime?
+  recipientType String?
+  recipientFilter Json?
+  totalRecipients Int    @default(0)
+  sentCount     Int      @default(0)
+  failedCount   Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  event         Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  recipients    EmailRecipient[]
+  logs          EmailLog[]
+  @@map("email_campaigns")
+}
+
+model EmailRecipient {
+  id          String   @id @default(cuid())
+  campaignId  String
+  email       String
+  name        String?
+  status      String   @default("PENDING")
+  sentAt      DateTime?
+  error       String?
+  metadata    Json?
+  campaign    EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  @@map("email_recipients")
+}
+
+model EmailLog {
+  id          String   @id @default(cuid())
+  campaignId  String?
+  toEmail     String
+  subject     String
+  status      String
+  resendId    String?
+  error       String?
+  sentAt      DateTime @default(now())
+  metadata    Json?
+  campaign    EmailCampaign? @relation(fields: [campaignId], references: [id])
+  @@map("email_logs")
+}
+
+model Reminder {
+  id            String   @id @default(cuid())
+  eventId       String
+  name          String
+  subject       String
+  bodyHtml      String   @db.Text
+  scheduledAt   DateTime
+  timezone      String   @default("Asia/Kolkata")
+  status        String   @default("SCHEDULED")
+  recipientType String?
+  recipientFilter Json?
+  sentAt        DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  event         Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  recipients    ReminderRecipient[]
+  @@map("reminders")
+}
+
+model ReminderRecipient {
+  id          String   @id @default(cuid())
+  reminderId  String
+  email       String
+  name        String?
+  status      String   @default("PENDING")
+  sentAt      DateTime?
+  error       String?
+  reminder    Reminder @relation(fields: [reminderId], references: [id], onDelete: Cascade)
+  @@map("reminder_recipients")
+}
+
+model MediaAsset {
+  id          String   @id @default(cuid())
+  eventId     String?
+  filename    String
+  url         String
+  mimeType    String?
+  size        Int?
+  altText     String?
+  folder      String?
+  createdAt   DateTime @default(now())
+  event       Event? @relation(fields: [eventId], references: [id])
+  @@map("media_assets")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  action      String
+  entityType  String?
+  entityId    String?
+  details     Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+  user        User? @relation(fields: [userId], references: [id])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
